@@ -122,7 +122,42 @@ async function runTests() {
     console.assert(updatedEnt.removeAds === true, 'removeAds should be granted via webhook');
     console.log('PASS: Webhook processed and removeAds granted permanently.');
 
-    console.log('\nALL 6 BACKEND MONETIZATION SCENARIOS PASSED 100%!');
+    // TEST 7: Root and Health Endpoints verification (HTTP Independent of DB)
+    console.log('\n--- TEST 7: Health & Root HTTP Endpoints ---');
+    const app = require('../server');
+    const http = require('http');
+
+    const server = http.createServer(app);
+    await new Promise(resolve => server.listen(0, resolve));
+    const port = server.address().port;
+
+    function get(path) {
+      return new Promise((resolve, reject) => {
+        http.get(`http://127.0.0.1:${port}${path}`, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(data) }));
+        }).on('error', reject);
+      });
+    }
+
+    const rootRes = await get('/');
+    console.assert(rootRes.status === 200, 'Root status should be 200');
+    console.assert(rootRes.body.success === true, 'Root success should be true');
+    console.assert(rootRes.body.message === 'PATHORA Backend is running', 'Root message should match');
+    console.assert(rootRes.body.status === 'healthy', 'Root status should be healthy');
+    console.log('PASS: GET / verified successfully (HTTP 200, status: healthy).');
+
+    const healthRes = await get('/health');
+    console.assert(healthRes.status === 200, 'Health status should be 200');
+    console.assert(healthRes.body.success === true, 'Health success should be true');
+    console.assert(healthRes.body.status === 'healthy', 'Health status should be healthy');
+    console.assert(healthRes.body.service === 'PATHORA Backend', 'Health service should match');
+    console.log('PASS: GET /health verified successfully (HTTP 200, service: PATHORA Backend).');
+
+    await new Promise(resolve => server.close(resolve));
+
+    console.log('\nALL 7 BACKEND SCENARIOS & ENDPOINTS PASSED 100%!');
   } catch (err) {
     console.error('Test execution failed:', err);
     process.exit(1);

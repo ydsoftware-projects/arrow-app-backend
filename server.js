@@ -22,18 +22,26 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Routes
-app.use('/api/payments', paymentRoutes);
-
-// Health Check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'online',
-    timestamp: new Date().toISOString(),
-    service: 'PATHORA Monetization Backend',
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+// 1. Root Endpoint (Independent of DB / Razorpay)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'PATHORA Backend is running',
+    status: 'healthy'
   });
 });
+
+// 2. Health Endpoint (Independent of DB / Razorpay)
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    status: 'healthy',
+    service: 'PATHORA Backend'
+  });
+});
+
+// 3. Payment & Monetization Routes
+app.use('/api/payments', paymentRoutes);
 
 async function startServer() {
   const mongoUri = process.env.MONGODB_URI;
