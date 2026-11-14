@@ -1,22 +1,35 @@
 const PRODUCTS = [
   {
-    id: 'pathora_hints_small',
-    name: 'Hint Pack Small',
-    description: '10 Hints to solve challenging puzzles',
-    price: 4900, // in paise (₹49)
+    id: 'pathora_hints_5',
+    name: '5 Hints',
+    description: '5 Hints to solve challenging puzzles',
+    price: 900, // in paise (₹9)
     currency: 'INR',
     type: 'consumable',
     active: true,
     entitlement: {
       type: 'hints',
-      amount: 10
+      amount: 5
     }
   },
   {
-    id: 'pathora_hints_medium',
-    name: 'Hint Pack Medium',
-    description: '50 Hints with 20% bonus value',
-    price: 19900, // ₹199
+    id: 'pathora_hints_15',
+    name: '15 Hints',
+    description: '15 Hints for tricky boards',
+    price: 1900, // ₹19
+    currency: 'INR',
+    type: 'consumable',
+    active: true,
+    entitlement: {
+      type: 'hints',
+      amount: 15
+    }
+  },
+  {
+    id: 'pathora_hints_50',
+    name: '50 Hints',
+    description: '50 Hints with maximum value',
+    price: 3900, // ₹39
     currency: 'INR',
     type: 'consumable',
     active: true,
@@ -26,49 +39,36 @@ const PRODUCTS = [
     }
   },
   {
-    id: 'pathora_hints_large',
-    name: 'Hint Pack Large',
-    description: '150 Hints for puzzle masters',
-    price: 49900, // ₹499
-    currency: 'INR',
-    type: 'consumable',
-    active: true,
-    entitlement: {
-      type: 'hints',
-      amount: 150
-    }
-  },
-  {
-    id: 'pathora_extra_lives',
-    name: 'Extra Lives Pack',
-    description: '10 Additional Lives to recover anytime',
-    price: 7900, // ₹79
+    id: 'pathora_lives_5',
+    name: '5 Extra Lives',
+    description: '5 Additional Lives to recover anytime',
+    price: 900, // ₹9
     currency: 'INR',
     type: 'consumable',
     active: true,
     entitlement: {
       type: 'lives',
-      amount: 10
+      amount: 5
     }
   },
   {
-    id: 'pathora_remove_ads',
-    name: 'Remove Ads',
-    description: 'Permanent ad-free puzzle experience',
-    price: 14900, // ₹149
+    id: 'pathora_lives_15',
+    name: '15 Extra Lives',
+    description: '15 Additional Lives to keep playing',
+    price: 1900, // ₹19
     currency: 'INR',
-    type: 'non_consumable',
+    type: 'consumable',
     active: true,
     entitlement: {
-      type: 'remove_ads',
-      value: true
+      type: 'lives',
+      amount: 15
     }
   },
   {
     id: 'pathora_premium_puzzles',
     name: 'Premium Puzzle Pack',
     description: '50 Exclusive master-crafted campaign levels',
-    price: 9900, // ₹99
+    price: 2900, // ₹29
     currency: 'INR',
     type: 'non_consumable',
     active: true,
@@ -81,7 +81,7 @@ const PRODUCTS = [
     id: 'pathora_premium_themes',
     name: 'Premium Theme Pack',
     description: 'Unlock Sunset, Amber, Neon and Forest themes',
-    price: 9900, // ₹99
+    price: 1900, // ₹19
     currency: 'INR',
     type: 'non_consumable',
     active: true,
@@ -100,4 +100,3 @@ module.exports = {
   PRODUCTS,
   getProductById
 };
-

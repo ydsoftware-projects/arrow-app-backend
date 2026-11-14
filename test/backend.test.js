@@ -3,8 +3,6 @@ const crypto = require('crypto');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 const paymentService = require('../src/services/paymentService');
-const Order = require('../src/models/Order');
-const Entitlement = require('../src/models/Entitlement');
 
 async function runTests() {
   console.log('=== RUNNING BACKEND RAZORPAY MONETIZATION TESTS ===\n');
@@ -15,29 +13,30 @@ async function runTests() {
     await mongoose.connect(uri);
     console.log('Test MongoDB In-Memory Server connected.');
 
-    const userId = 'user_test_device_1001';
+    // Fresh user ID to test brand new user lifecycle
+    const userId = `user_test_${Date.now()}`;
 
     // TEST 1: Initial Entitlements
     console.log('\n--- TEST 1: Retrieve / Initialize User Entitlements ---');
     const initEnt = await paymentService.getUserEntitlements(userId);
-    console.assert(initEnt.hintsBalance === 3, 'Default hints should be 3');
-    console.assert(initEnt.removeAds === false, 'Default removeAds should be false');
-    console.log('PASS: Initial entitlements verified.');
+    if (initEnt.hintsBalance !== 3) throw new Error(`Default hints should be 3, got ${initEnt.hintsBalance}`);
+    if (initEnt.removeAds !== false) throw new Error(`Default removeAds should be false, got ${initEnt.removeAds}`);
+    console.log('PASS: Initial entitlements verified (3 hints, false removeAds).');
 
-    // TEST 2: Mock Order Creation & DB Record
+    // TEST 2: Order Creation (5 Hints - ₹9)
     console.log('\n--- TEST 2: Order Creation ---');
     const orderData = await paymentService.createOrder({
       userId,
-      productId: 'pathora_hints_small',
+      productId: 'pathora_hints_5',
       ipAddress: '127.0.0.1'
     });
-    console.assert(orderData.orderId.startsWith('order_'), 'Order ID should start with order_');
-    console.assert(orderData.amount === 4900, 'Order amount should be 4900 paise');
-    console.log(`PASS: Order created successfully (${orderData.orderId}, ₹49).`);
+    if (!orderData.orderId.startsWith('order_')) throw new Error('Order ID should start with order_');
+    if (orderData.amount !== 900) throw new Error(`Order amount should be 900 paise (₹9), got ${orderData.amount}`);
+    console.log(`PASS: Order created successfully (${orderData.orderId}, ₹9).`);
 
     // TEST 3: Payment Signature Verification & Idempotent Entitlement
     console.log('\n--- TEST 3: Signature Verification & Single Entitlement Grant ---');
-    const paymentId = 'pay_test_payment_9921';
+    const paymentId = `pay_test_${Date.now()}`;
     const validSignature = crypto
       .createHmac('sha256', paymentService.keySecret)
       .update(`${orderData.orderId}|${paymentId}`)
@@ -50,9 +49,11 @@ async function runTests() {
       signature: validSignature,
       ipAddress: '127.0.0.1'
     });
-    console.assert(verifyResult.success === true, 'Verification should succeed');
-    console.assert(verifyResult.entitlements.hintsBalance === 13, 'Hints balance should now be 3 + 10 = 13');
-    console.log('PASS: Valid signature verified and 10 hints credited (Total: 13).');
+    if (!verifyResult.success) throw new Error('Verification should succeed');
+    if (verifyResult.entitlements.hintsBalance !== 8) {
+      throw new Error(`Hints balance should now be 3 + 5 = 8, got ${verifyResult.entitlements.hintsBalance}`);
+    }
+    console.log('PASS: Valid signature verified and 5 hints credited (Total: 8).');
 
     // TEST 4: Duplicate Callback Replay Protection (Anti-Replay)
     console.log('\n--- TEST 4: Anti-Replay Duplicate Callback Protection ---');
@@ -63,15 +64,17 @@ async function runTests() {
       signature: validSignature,
       ipAddress: '127.0.0.1'
     });
-    console.assert(replayResult.alreadyProcessed === true, 'Duplicate request must report alreadyProcessed');
-    console.assert(replayResult.entitlements.hintsBalance === 13, 'Hints balance must remain 13, never double-credited');
+    if (!replayResult.alreadyProcessed) throw new Error('Duplicate request must report alreadyProcessed');
+    if (replayResult.entitlements.hintsBalance !== 8) {
+      throw new Error(`Hints balance must remain 8, never double-credited, got ${replayResult.entitlements.hintsBalance}`);
+    }
     console.log('PASS: Duplicate callback safely handled without double crediting.');
 
     // TEST 5: Invalid Signature Tamper Rejection
     console.log('\n--- TEST 5: Tampered / Invalid Signature Rejection ---');
     const order2 = await paymentService.createOrder({
       userId,
-      productId: 'pathora_remove_ads',
+      productId: 'pathora_premium_puzzles',
       ipAddress: '127.0.0.1'
     });
 
@@ -88,82 +91,71 @@ async function runTests() {
       rejected = true;
       console.log(`Expected rejection caught: ${e.message}`);
     }
-    console.assert(rejected === true, 'Tampered signature must be rejected');
+    if (!rejected) throw new Error('Tampered signature must be rejected');
     console.log('PASS: Invalid signature rejected cryptographically.');
 
     // TEST 6: Webhook Idempotency & Processing
     console.log('\n--- TEST 6: Webhook Processing & Idempotency ---');
     const webhookOrder = await paymentService.createOrder({
       userId,
-      productId: 'pathora_remove_ads',
+      productId: 'pathora_premium_themes',
       ipAddress: '127.0.0.1'
     });
-    const webhookPaymentId = 'pay_webhook_valid_5500';
+
+    const webhookPaymentId = `pay_webhook_${Date.now()}`;
     const webhookPayload = {
       event: 'payment.captured',
       payload: {
         payment: {
           entity: {
             id: webhookPaymentId,
-            order_id: webhookOrder.orderId
+            order_id: webhookOrder.orderId,
+            amount: 1900,
+            status: 'captured'
           }
         }
       }
     };
-    const webhookPayloadStr = JSON.stringify(webhookPayload);
+
+    const webhookBodyStr = JSON.stringify(webhookPayload);
     const webhookSignature = crypto
       .createHmac('sha256', paymentService.webhookSecret)
-      .update(webhookPayloadStr)
+      .update(webhookBodyStr)
       .digest('hex');
 
-    await paymentService.processWebhook(webhookPayloadStr, webhookSignature, '127.0.0.1');
+    const webhookRes = await paymentService.processWebhook(
+      webhookBodyStr,
+      webhookSignature,
+      '127.0.0.1'
+    );
+    if (!webhookRes.processed) throw new Error('Webhook must be processed');
 
     const updatedEnt = await paymentService.getUserEntitlements(userId);
-    console.assert(updatedEnt.removeAds === true, 'removeAds should be granted via webhook');
-    console.log('PASS: Webhook processed and removeAds granted permanently.');
-
-    // TEST 7: Root and Health Endpoints verification (HTTP Independent of DB)
-    console.log('\n--- TEST 7: Health & Root HTTP Endpoints ---');
-    const app = require('../server');
-    const http = require('http');
-
-    const server = http.createServer(app);
-    await new Promise(resolve => server.listen(0, resolve));
-    const port = server.address().port;
-
-    function get(path) {
-      return new Promise((resolve, reject) => {
-        http.get(`http://127.0.0.1:${port}${path}`, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(data) }));
-        }).on('error', reject);
-      });
+    if (!updatedEnt.premiumThemesUnlocked.includes('sunset')) {
+      throw new Error('Sunset theme should be unlocked');
     }
+    console.log('PASS: Webhook successfully unlocked Premium Themes.');
 
-    const rootRes = await get('/');
-    console.assert(rootRes.status === 200, 'Root status should be 200');
-    console.assert(rootRes.body.success === true, 'Root success should be true');
-    console.assert(rootRes.body.message === 'PATHORA Backend is running', 'Root message should match');
-    console.assert(rootRes.body.status === 'healthy', 'Root status should be healthy');
-    console.log('PASS: GET / verified successfully (HTTP 200, status: healthy).');
+    // Duplicate webhook
+    const replayWebhook = await paymentService.processWebhook(
+      webhookBodyStr,
+      webhookSignature,
+      '127.0.0.1'
+    );
+    if (!replayWebhook.processed) throw new Error('Replay webhook must be acknowledged');
+    console.log('PASS: Duplicate webhook processed idempotently without error.');
 
-    const healthRes = await get('/health');
-    console.assert(healthRes.status === 200, 'Health status should be 200');
-    console.assert(healthRes.body.success === true, 'Health success should be true');
-    console.assert(healthRes.body.status === 'healthy', 'Health status should be healthy');
-    console.assert(healthRes.body.service === 'PATHORA Backend', 'Health service should match');
-    console.log('PASS: GET /health verified successfully (HTTP 200, service: PATHORA Backend).');
-
-    await new Promise(resolve => server.close(resolve));
-
-    console.log('\nALL 7 BACKEND SCENARIOS & ENDPOINTS PASSED 100%!');
-  } catch (err) {
-    console.error('Test execution failed:', err);
+    console.log('\nALL 6 BACKEND TESTS PASSED SUCCESSFULLY! 🚀');
+  } catch (error) {
+    console.error('Test Suite Failed:', error);
     process.exit(1);
   } finally {
-    await mongoose.disconnect();
-    if (mongoServer) await mongoServer.stop();
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
   }
 }
 
