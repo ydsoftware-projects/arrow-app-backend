@@ -1,3 +1,9 @@
+const dns = require('dns');
+// Fallback DNS resolvers for reliable MongoDB Atlas SRV connection
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+} catch (_) {}
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -10,7 +16,12 @@ const PORT = process.env.PORT || 5000;
 
 // Security Middlewares
 app.use(cors());
-app.use(express.json());
+// Preserve rawBody for accurate cryptographic webhook signature verification
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // Rate Limiting
 const limiter = rateLimit({
@@ -27,16 +38,18 @@ app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'PATHORA Backend is running',
-    status: 'healthy'
+    status: 'healthy',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
 
-// 2. Health Endpoint (Independent of DB / Razorpay)
+// 2. Health Endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
     status: 'healthy',
-    service: 'PATHORA Backend'
+    service: 'PATHORA Backend',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
 
@@ -52,6 +65,8 @@ async function startServer() {
     } catch (err) {
       console.warn('MongoDB Atlas connection notice:', err.message);
     }
+  } else {
+    console.warn('Notice: MONGODB_URI environment variable not configured.');
   }
 
   app.listen(PORT, '0.0.0.0', () => {

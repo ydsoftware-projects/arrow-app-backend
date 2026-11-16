@@ -106,13 +106,13 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     const webhookSignature = req.headers['x-razorpay-signature'];
     const ipAddress = req.ip || req.connection.remoteAddress;
 
-    await paymentService.processWebhook(
-      req.body,
+    const result = await paymentService.processWebhook(
+      req.rawBody || req.body,
       webhookSignature,
       ipAddress
     );
 
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', ...result });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
